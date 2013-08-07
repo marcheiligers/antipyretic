@@ -8,8 +8,11 @@ class String
 end
 
 class Processor
+  attr_reader :statements
+
   def initialize
     @registered_statement_types = []
+    @statements = []
   end
 
   def register_statement_type(statement_type)
@@ -47,6 +50,14 @@ class Statement
   def total
     lines.inject(0) { |a, l| a + l.amount }.round(2)
   end
+
+  def each_line(reader)
+    reader.pages.each do |page|
+      page.text.each_line do |line|
+        yield line
+      end
+    end
+  end
 end
 
 class FnbChequeStatement < Statement
@@ -60,20 +71,19 @@ class FnbChequeStatement < Statement
   def initialize(reader)
     found_opening = false
 
-    reader.pages.each do |page|
-      page.text.each_line do |line|
-        if found_opening
-          if line.include? 'Closing Balance'
-            found_opening = false
-          else
-            lines << FnbChequeLine.new(line) unless line.blank?
-          end
-        elsif line.include?('Opening Balance') && line.include?('0.00')
-          found_opening = true
+    each_line reader do |line|
+      if found_opening
+        if line.include? 'Closing Balance'
+          found_opening = false
+        else
+          lines << FnbChequeLine.new(line) unless line.blank?
         end
+      elsif line.include?('Opening Balance') && line.include?('0.00')
+        found_opening = true
       end
     end
   end
+
 end
 
 class FnbChequeLine
@@ -99,6 +109,10 @@ class FnbChequeLine
 end
 
 class FnbCardStatement < Statement
+  DATE_REGEX = /Statement Date (\d{1,2} \w{3} \d{4})/
+
+  attr_reader :date
+
   def self.matches?(reader)
     reader.pages.first.text.each_line do |line|
       return true if line.include? 'CREDIT ACCOUNT'
@@ -108,34 +122,41 @@ class FnbCardStatement < Statement
 
   def initialize(reader)
     found_opening = false
+    find_date reader
 
-    reader.pages.each do |page|
-      page.text.each_line do |line|
-        if line.match(/^ \d\d \w\w\w /)
-          lines << FnbCardLine.new(line) unless line.blank?
-        end
+    each_line reader do |line|
+      if line.match(/^ \d\d \w\w\w /)
+        lines << FnbCardLine.new(line, self) unless line.blank?
       end
+    end
+
+    lines.sort! { |a, b| a.date <=> b.date }
+  end
+
+  def find_date(reader)
+    each_line reader do |line|
+      match = line.match DATE_REGEX
+      return @date = Date.parse(match[1]) if match
     end
   end
 end
 
 class FnbCardLine
-  attr_reader :account, :date, :amount, :description
+  attr_reader :statement, :date, :amount, :description
 
-  def initialize(line, account = 'card', year = 2013)
-    @account = account
+  def initialize(line, statement)
+    @statement = statement
 
     data = line.strip.split(/\s{2,}/)
     day, month, *main_desc = data[0].strip.split(' ')
 
-    puts "#{day} #{month} #{year}"
-    @date = Date.parse("#{day} #{month} #{year}")
+    @date = Date.parse("#{day} #{month} #{statement.date.year}")
 
-    amount_index = data[-1].gsub(' ', '').to_f == 0 ? -1 : -2
+    amount_index = data[-1].gsub(' ', '').to_f == 0 ? -2 : -1
     @amount = data[amount_index].gsub(' ', '').to_f
     @amount *= -1 if data[amount_index].downcase.end_with?('cr')
 
-    @description = main_desc.join(' ') + data[1..amount_index].join('  ')
+    @description = (main_desc.join(' ') + '  ' + data[1..amount_index - 1].join(' ')).strip
   end
 
   def to_s
