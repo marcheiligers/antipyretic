@@ -1,17 +1,61 @@
 #!/usr/bin/env ruby
 
 require_relative '../lib/antipyretic'
+require 'optparse'
 
-unless ARGV[0] && File.exists?(ARGV[0])
-  puts "Usage antipyretic filename"
-  puts "File #{ARGV[0]} not found" if ARGV[0]
-  exit 1
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: antipyretic [options] filename"
+
+  opts.on("-p", "--print", "Print output to the STDOUT") do |value|
+    options[:print] = value
+  end
+
+  opts.on("-d", "--directory", "The filename is a directory") do |value|
+    options[:dir] = value
+  end
+
+  opts.on("-t", "--text", "Print the filename as a text file") do |value|
+    options[:text] = value
+  end
+
+  opts.on("-m", "--match REGEXP", "Print all matches of the file against REGEXP") do |value|
+    options[:match] = value
+  end
+
+  opts.on("-c", "--classify FILE", "A YML FILE which contains rules and tags for classifying lines") do |value|
+    options[:classify] = value
+  end
+end.parse!
+options[:filename] = ARGV.join(' ')
+
+Classifier.load options[:classify] if options[:classify]
+
+if options[:text]
+  puts PDF::Reader.new(options[:filename]).pages.map(&:text).join("\n#{'-' * 120}\n")
+elsif options[:match]
+  regexp = Regexp.new options[:match]
+  PDF::Reader.new(options[:filename]).each_line do |line|
+    match = line.match regexp
+    puts "#{'-' * 120}\n#{line}\n#{match.pretty_print}\n" if match
+  end
+elsif options[:dir]
+  Dir.foreach(options[:filename]) do |filename|
+    next unless filename.end_with? '.pdf'
+    Processor.process_file File.join(options[:filename], filename)
+  end
+else
+  Processor.process_file options[:filename]
 end
 
-processor = Processor.new
-processor.register_statement_type(FnbChequeStatement)
-processor.register_statement_type(FnbCardStatement)
-statement = processor.process_file ARGV[0]
+if options[:print]
+  max_description, max_amount = 0, 0
+  Processor.lines.each do |line|
+    max_description = [max_description, line.description.length].max
+    max_amount = [max_amount, ('%0.2f' % line.amount).length].max
+  end
 
-puts statement.lines.map(&:to_s)
-puts "Total: #{statement.total}"
+  Processor.lines.each do |line|
+    puts "#{line.date}  #{line.description.ljust(max_description)}  #{('%0.2f' % line.amount).rjust(max_amount)}  #{line.tags.join(', ')}"
+  end
+end

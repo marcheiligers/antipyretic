@@ -8,9 +8,14 @@ class PDF::Reader
   end
 
   def any_line?
+    result = false
     each_line do |line|
-      return true if yield line
+      if yield line
+        result = true
+        break
+      end
     end
+    result
   end
 
   def first_line
