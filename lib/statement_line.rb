@@ -1,7 +1,7 @@
 class StatementLine
   AMOUNT_CLEANUP_REGEX = /(,| )/
 
-  attr_reader :account, :date, :amount, :description, :tags
+  attr_reader :account, :date, :amount, :description, :tags, :statement
 
   def initialize(line, statement)
     @statement = statement
@@ -29,8 +29,8 @@ class StatementLine
   end
 
   def check_date(date)
-    date < @statement.date.prev_month(3) ?
-      Date.new(date.year + 1, date.month, date.day) :
+    date > @statement.date.next_month(3) ?
+      Date.new(date.year - 1, date.month, date.day) :
       date
   end
 

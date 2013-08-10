@@ -2,6 +2,7 @@ require 'pdf-reader'
 require 'date'
 require 'singleton'
 require 'yaml'
+require 'csv'
 
 require_relative 'ext/string'
 require_relative 'ext/pdf_reader'

@@ -4,11 +4,15 @@ require_relative '../lib/antipyretic'
 require 'optparse'
 
 options = {}
-OptionParser.new do |opts|
+optparser = OptionParser.new do |opts|
   opts.banner = "Usage: antipyretic [options] filename"
 
-  opts.on("-p", "--print", "Print output to the STDOUT") do |value|
+  opts.on("-p", "--print", "Print output to STDOUT") do |value|
     options[:print] = value
+  end
+
+  opts.on("--csv", "Print CSV formatted output to STDOUT") do |value|
+    options[:csv] = value
   end
 
   opts.on("-d", "--directory", "The filename is a directory") do |value|
@@ -38,6 +42,19 @@ OptionParser.new do |opts|
   opts.on("--tag REGEXP", "Filter lines to match REGEXP only") do |value|
     options[:tag] = Regexp.new(value, Regexp::IGNORECASE)
   end
+
+  opts.on("--list", "List files included after filters are applied") do |value|
+    options[:list] = value
+  end
+
+  opts.on("--verbose", "Show progress while reading files") do |value|
+    options[:verbose] = value
+  end
+
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
 end.parse!
 options[:filename] = ARGV.join(' ')
 
@@ -54,6 +71,7 @@ elsif options[:match]
 elsif options[:dir]
   Dir.foreach(options[:filename]) do |filename|
     next unless filename.end_with? '.pdf'
+    puts "Processing file #{filename}" if options[:verbose]
     Processor.process_file File.join(options[:filename], filename)
   end
 else
@@ -65,6 +83,14 @@ if options[:from_date] || options[:to_date]
 end
 
 Processor.filter_by_tag!(options[:tag]) if options[:tag]
+
+if options[:list]
+  statements = []
+  Processor.lines.each do |line|
+    statements << line.statement unless statements.include? line.statement
+  end
+  puts statements.sort { |a, b| a.date <=> b.date }.map { |statement| "#{statement.date} #{statement.name.ljust(15)} #{statement.filename}"}
+end
 
 if options[:print]
   max_description, max_amount = 0, 0
@@ -79,4 +105,19 @@ if options[:print]
     puts "#{line.date}  #{line.description.ljust(max_description)}  #{('%0.2f' % line.amount).rjust(max_amount)}  #{line.tags.join(', ')}"
   end
   puts "Total #{'%0.2f' % total}"
+end
+
+if options[:csv]
+  result = CSV.generate do |csv|
+    csv << ['date', 'description', 'amount', 'tag']
+    Processor.lines.each do |line|
+      csv << [
+        line.date.to_s,
+        line.description,
+        ('%0.2f' % line.amount),
+        line.tags.join(', ')
+      ]
+    end
+  end
+  puts result
 end

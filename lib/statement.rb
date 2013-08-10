@@ -1,5 +1,5 @@
 class Statement
-  attr_reader :date
+  attr_reader :date, :filename
 
   class << self
     def statement_config(name, match_regexp, date_regexp = nil)
@@ -22,8 +22,8 @@ class Statement
       end
     end
 
-    def process(reader)
-      new reader
+    def process(filename, reader)
+      new filename, reader
     end
 
     def config
@@ -45,7 +45,8 @@ class Statement
     end
   end
 
-  def initialize(reader)
+  def initialize(filename, reader)
+    @filename = filename
     parse_date reader
 
     reader.each_line do |line|

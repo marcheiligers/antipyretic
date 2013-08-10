@@ -34,12 +34,11 @@ class Processor
   end
 
   def process_file(filename)
-    puts "Processing file #{filename}"
     reader = PDF::Reader.new filename
     type = statement_type reader
 
     raise "#{filename} is an unrecognized statement type" unless type
-    statement = type.process(reader)
+    statement = type.process(filename, reader)
     statements << statement if statements.none? { |s| s.name == statement.name && s.date == statement.date }
   end
 
