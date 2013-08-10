@@ -8,6 +8,8 @@ class Processor
               :process_file,
               :statement_type,
               :lines,
+              :filter_by_period!,
+              :filter_by_tag!,
               :to => :instance
   end
 
@@ -42,6 +44,18 @@ class Processor
   end
 
   def lines
-    statements.map(&:lines).flatten.sort { |a, b| a.date <=> b.date }
+    @lines ||= all_lines!
+  end
+
+  def all_lines!
+    @lines = statements.map(&:lines).flatten.sort { |a, b| a.date <=> b.date }
+  end
+
+  def filter_by_period!(from_date, to_date)
+    lines.select! { |line| line.date >= from_date && line.date <= to_date }
+  end
+
+  def filter_by_tag!(tag_regex)
+    lines.select! { |line| line.tags.join(' ').match(tag_regex) }
   end
 end

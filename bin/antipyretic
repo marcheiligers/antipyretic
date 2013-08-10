@@ -15,16 +15,28 @@ OptionParser.new do |opts|
     options[:dir] = value
   end
 
-  opts.on("-t", "--text", "Print the filename as a text file") do |value|
+  opts.on("-t", "--text", "Print the filename as a text file. Works on a single file only and cannot be used with -d.") do |value|
     options[:text] = value
   end
 
-  opts.on("-m", "--match REGEXP", "Print all matches of the file against REGEXP") do |value|
+  opts.on("-m", "--match REGEXP", "Print all matches of the file against REGEXP. Works on a single file only and cannot be used with -d.") do |value|
     options[:match] = value
   end
 
   opts.on("-c", "--classify FILE", "A YML FILE which contains rules and tags for classifying lines") do |value|
     options[:classify] = value
+  end
+
+  opts.on("--from DATE", "Filter lines from date") do |value|
+    options[:from_date] = Date.parse(value)
+  end
+
+  opts.on("--to DATE", "Filter lines to date") do |value|
+    options[:to_date] = Date.parse(value)
+  end
+
+  opts.on("--tag REGEXP", "Filter lines to match REGEXP only") do |value|
+    options[:tag] = Regexp.new(value, Regexp::IGNORECASE)
   end
 end.parse!
 options[:filename] = ARGV.join(' ')
@@ -48,6 +60,12 @@ else
   Processor.process_file options[:filename]
 end
 
+if options[:from_date] || options[:to_date]
+  Processor.filter_by_period!(options[:from_date] || Date.new(1900, 1, 1), options[:to_date] || Date.new(2100, 1, 1))
+end
+
+Processor.filter_by_tag!(options[:tag]) if options[:tag]
+
 if options[:print]
   max_description, max_amount = 0, 0
   Processor.lines.each do |line|
@@ -55,7 +73,10 @@ if options[:print]
     max_amount = [max_amount, ('%0.2f' % line.amount).length].max
   end
 
+  total = 0
   Processor.lines.each do |line|
+    total += line.amount
     puts "#{line.date}  #{line.description.ljust(max_description)}  #{('%0.2f' % line.amount).rjust(max_amount)}  #{line.tags.join(', ')}"
   end
+  puts "Total #{'%0.2f' % total}"
 end
